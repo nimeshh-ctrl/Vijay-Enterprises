@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import {
   collection, doc, onSnapshot,
-  addDoc, updateDoc, deleteDoc,
+  addDoc, updateDoc, deleteDoc, query, where, getDocs,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import {
+  RecaptchaVerifier, signInWithPhoneNumber,
+} from "firebase/auth";
+import { db, auth } from "./firebase";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
-const fmt    = n => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = s => s ? new Date(s).toLocaleDateString('en-IN',  { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const fmtDT   = s => s ? new Date(s).toLocaleString('en-IN',      { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmt     = n  => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDate = s  => s ? new Date(s).toLocaleDateString('en-IN',  { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtDT   = s  => s ? new Date(s).toLocaleString('en-IN',      { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 const now     = () => new Date().toISOString();
 
 // ── Theme ──────────────────────────────────────────────────────────────────
@@ -31,8 +34,8 @@ const lbl = {
 const mkBtn = (v = 'primary') => ({
   padding: '10px 20px', borderRadius: 10, cursor: 'pointer', fontWeight: 800,
   fontSize: 14, fontFamily: 'inherit', transition: 'all 0.18s', letterSpacing: 0.2,
-  background: v === 'primary' ? C.primary : v === 'danger' ? C.danger : v === 'amber' ? C.accent : '#fff',
-  color: ['primary', 'danger', 'amber'].includes(v) ? '#fff' : C.primary,
+  background: v === 'primary' ? C.primary : v === 'danger' ? C.danger : v === 'amber' ? C.accent : v === 'upi' ? '#7c3aed' : '#fff',
+  color: ['primary','danger','amber','upi'].includes(v) ? '#fff' : C.primary,
   boxShadow: v === 'primary' ? '0 2px 8px rgba(22,163,74,0.25)' : 'none',
   border: v === 'outline' ? `2px solid ${C.primary}` : 'none',
 });
@@ -42,6 +45,18 @@ const mkBadge = color => ({
   background: color === 'green' ? C.light : color === 'amber' ? C.accentLight : '#f3f4f6',
   color: color === 'green' ? C.dark : color === 'amber' ? '#92400e' : C.muted,
 });
+
+// ── Payment Badge ──────────────────────────────────────────────────────────
+const PayBadge = ({ method }) => (
+  <span style={{
+    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+    background: method === 'upi' ? '#ede9fe' : '#f0fdf4',
+    color: method === 'upi' ? '#7c3aed' : C.dark,
+    border: `1px solid ${method === 'upi' ? '#ddd6fe' : C.border}`,
+  }}>
+    {method === 'upi' ? '📲 UPI' : '💵 Cash'}
+  </span>
+);
 
 // ── App Root ───────────────────────────────────────────────────────────────
 export default function App() {
@@ -53,7 +68,6 @@ export default function App() {
   const [cart,      setCart]      = useState([]);
 
   useEffect(() => {
-    // Global styles
     const st = document.createElement('style');
     st.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,700&display=swap');
@@ -66,7 +80,6 @@ export default function App() {
     `;
     document.head.appendChild(st);
 
-    // Restore session from localStorage
     const sess = localStorage.getItem('groc_session');
     if (sess) {
       const u = JSON.parse(sess);
@@ -76,7 +89,6 @@ export default function App() {
       setPage('auth');
     }
 
-    // ── Real-time Firebase listeners ──
     const unsubStock     = onSnapshot(collection(db, 'stock'),     s => setStock(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubOrders    = onSnapshot(collection(db, 'orders'),    s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCustomers = onSnapshot(collection(db, 'customers'), s => setCustomers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -84,18 +96,8 @@ export default function App() {
     return () => { unsubStock(); unsubOrders(); unsubCustomers(); };
   }, []);
 
-  
-
-  const doLogin = u => {
-    setUser(u);
-    localStorage.setItem('groc_session', JSON.stringify(u));
-    setPage(u.type === 'owner' ? 'owner' : 'customer');
-  };
-  const doLogout = () => {
-    setUser(null); setCart([]);
-    localStorage.removeItem('groc_session');
-    setPage('auth');
-  };
+  const doLogin  = u => { setUser(u); localStorage.setItem('groc_session', JSON.stringify(u)); setPage(u.type === 'owner' ? 'owner' : 'customer'); };
+  const doLogout = () => { setUser(null); setCart([]); localStorage.removeItem('groc_session'); setPage('auth'); };
 
   const wrap = { fontFamily: "'Nunito', sans-serif", minHeight: '100vh', background: C.bg, color: C.text };
 
@@ -110,8 +112,10 @@ export default function App() {
 
   return (
     <div style={wrap}>
+      {/* Invisible recaptcha container — always in DOM */}
+      <div id="recaptcha-container"></div>
       {page === 'auth'     && <AuthPage customers={customers} onLogin={doLogin} />}
-      {page === 'owner'    && <OwnerPage stock={stock} orders={orders} onLogout={doLogout} />}
+      {page === 'owner'    && <OwnerPage stock={stock} orders={orders} customers={customers} onLogout={doLogout} />}
       {page === 'customer' && <CustomerPage user={user} stock={stock} orders={orders} cart={cart} setCart={setCart} onLogout={doLogout} />}
     </div>
   );
@@ -125,6 +129,9 @@ function AuthPage({ customers, onLogin }) {
   const [ok,       setOk]       = useState('');
   const [loading,  setLoading]  = useState(false);
   const [logoTaps, setLogoTaps] = useState(0);
+  // OTP flow: 'form' → 'otp' → done
+  const [stage,    setStage]    = useState('form');
+  const [otp,      setOtp]      = useState('');
 
   const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setErr(''); };
 
@@ -141,7 +148,8 @@ function AuthPage({ customers, onLogin }) {
     onLogin({ type: 'customer', ...c });
   };
 
-  const handleSignup = async () => {
+  // Step 1 — Send OTP
+  const handleSendOTP = async () => {
     const { name, storeName, address, mobile } = f;
     if (!name?.trim() || !storeName?.trim() || !address?.trim() || !mobile?.trim()) {
       setErr('Sab fields bharna zaroori hai!'); return;
@@ -150,23 +158,45 @@ function AuthPage({ customers, onLogin }) {
     if (customers.find(c => c.mobile === mobile)) {
       setErr('Yeh mobile already registered hai. Login karo.'); return;
     }
-    setLoading(true);
+    setLoading(true); setErr('');
     try {
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch {}
+        window.recaptchaVerifier = null;
+      }
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+      const phoneNumber = '+91' + mobile.trim();
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+      window.confirmationResult = confirmationResult;
+      setStage('otp');
+    } catch (e) {
+      setErr('OTP bhejne mein dikkat: ' + (e.message || 'Dobara try karo'));
+      if (window.recaptchaVerifier) { try { window.recaptchaVerifier.clear(); } catch {} window.recaptchaVerifier = null; }
+    }
+    setLoading(false);
+  };
+
+  // Step 2 — Verify OTP
+  const handleVerifyOTP = async () => {
+    if (!otp || otp.length < 6) { setErr('6-digit OTP daalo'); return; }
+    setLoading(true); setErr('');
+    try {
+      await window.confirmationResult.confirm(otp);
+      // OTP verified — create customer
       await addDoc(collection(db, 'customers'), {
-        name: name.trim(), storeName: storeName.trim(),
-        address: address.trim(), mobile, createdAt: now(),
+        name: f.name.trim(), storeName: f.storeName.trim(),
+        address: f.address.trim(), mobile: f.mobile, createdAt: now(),
       });
       setOk('✅ Account ban gaya! Ab Login karo.');
-      setF({});
+      setF({}); setOtp(''); setStage('form');
       setTimeout(() => { setOk(''); setTab('login'); }, 2500);
     } catch {
-      setErr('Network error. Internet check karo aur dobara try karo.');
+      setErr('Galat OTP hai. Dobara check karo.');
     }
     setLoading(false);
   };
 
   const handleOwnerLogin = () => {
-    // Owner credentials — SETUP.md mein change karne ka tarika hai
     if (f.username === 'admin' && f.password === 'grocery123')
       onLogin({ type: 'owner', name: 'Admin' });
     else setErr('Galat username ya password');
@@ -179,19 +209,15 @@ function AuthPage({ customers, onLogin }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'linear-gradient(160deg,#dcfce7 0%,#f0fdf4 55%,#ecfdf5 100%)' }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <div
-          onClick={handleLogoTap}
-          style={{ width: 72, height: 72, background: `linear-gradient(135deg,${C.dark},${C.primary})`, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, margin: '0 auto 12px', boxShadow: '0 8px 24px rgba(22,163,74,0.25)', cursor: 'default', userSelect: 'none' }}
-        >🛒</div>
-        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, color: C.dark, margin: 0 }}>Vijay Enterprises</h1>
+        <div onClick={handleLogoTap} style={{ width: 72, height: 72, background: `linear-gradient(135deg,${C.dark},${C.primary})`, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, margin: '0 auto 12px', boxShadow: '0 8px 24px rgba(22,163,74,0.25)', cursor: 'default', userSelect: 'none' }}>🛒</div>
+        <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, color: C.dark, margin: 0 }}>Dost Grocery</h1>
         <p style={{ color: C.muted, marginTop: 4, fontSize: 13, fontWeight: 600 }}>Aapka Bharosemand Supplier</p>
       </div>
 
       <div style={{ ...mkCard, width: '100%', maxWidth: 380 }}>
-        {/* Tabs */}
         <div style={{ display: 'flex', background: C.bg, borderRadius: 12, padding: 4, marginBottom: 22, gap: 3 }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); setF({}); setErr(''); setOk(''); }}
+            <button key={t.id} onClick={() => { setTab(t.id); setF({}); setErr(''); setOk(''); setStage('form'); setOtp(''); }}
               style={{ flex: 1, padding: '8px 4px', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontWeight: tab === t.id ? 800 : 600, fontSize: 12, background: tab === t.id ? C.primary : 'transparent', color: tab === t.id ? '#fff' : C.muted, transition: 'all 0.18s' }}>
               {t.label}
             </button>
@@ -210,7 +236,7 @@ function AuthPage({ customers, onLogin }) {
           </div>
         )}
 
-        {tab === 'signup' && (
+        {tab === 'signup' && stage === 'form' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div><label style={lbl}>Aapka Naam</label>
               <input style={inp} placeholder="Jaise: Ramesh Kumar" value={f.name || ''} onChange={e => set('name', e.target.value)} />
@@ -222,10 +248,30 @@ function AuthPage({ customers, onLogin }) {
               <textarea style={{ ...inp, resize: 'none', height: 72 }} placeholder="Gali, mohalla, sheher..." value={f.address || ''} onChange={e => set('address', e.target.value)} />
             </div>
             <div><label style={lbl}>Mobile Number</label>
-              <input style={inp} type="tel" placeholder="10-digit" maxLength={10} value={f.mobile || ''} onChange={e => set('mobile', e.target.value)} />
+              <input style={inp} type="tel" placeholder="10-digit (OTP aayega)" maxLength={10} value={f.mobile || ''} onChange={e => set('mobile', e.target.value)} />
             </div>
-            <button style={{ ...mkBtn('primary'), width: '100%', padding: 13, fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleSignup} disabled={loading}>
-              {loading ? 'Ban raha hai...' : 'Account Banao ✓'}
+            <button style={{ ...mkBtn('primary'), width: '100%', padding: 13, fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleSendOTP} disabled={loading}>
+              {loading ? 'OTP bhej raha hun...' : '📱 OTP Bhejo'}
+            </button>
+          </div>
+        )}
+
+        {tab === 'signup' && stage === 'otp' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ background: C.light, color: C.dark, padding: '12px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700 }}>
+              📱 +91 {f.mobile} pe OTP bheja gaya hai
+            </div>
+            <div><label style={lbl}>6-digit OTP Daalo</label>
+              <input style={{ ...inp, fontSize: 22, letterSpacing: 8, textAlign: 'center', fontWeight: 900 }}
+                type="tel" placeholder="• • • • • •" maxLength={6}
+                value={otp} onChange={e => { setOtp(e.target.value); setErr(''); }} />
+            </div>
+            <button style={{ ...mkBtn('primary'), width: '100%', padding: 13, fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleVerifyOTP} disabled={loading}>
+              {loading ? 'Verify ho raha hai...' : 'Verify Karo ✓'}
+            </button>
+            <button style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', fontWeight: 700 }}
+              onClick={() => { setStage('form'); setOtp(''); setErr(''); }}>
+              ← Wapas jao / Dobara bhejo
             </button>
           </div>
         )}
@@ -233,7 +279,7 @@ function AuthPage({ customers, onLogin }) {
         {tab === 'owner' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ padding: '10px 12px', background: C.accentLight, borderRadius: 10, fontSize: 12, color: '#92400e', fontWeight: 700 }}>
-              🔐 Sirf owner ke liye. Default: admin / grocery123
+              🔐 Sirf owner ke liye
             </div>
             <div><label style={lbl}>Username</label>
               <input style={inp} placeholder="admin" value={f.username || ''} onChange={e => set('username', e.target.value)} />
@@ -250,30 +296,31 @@ function AuthPage({ customers, onLogin }) {
 }
 
 // ── Owner Page ─────────────────────────────────────────────────────────────
-function OwnerPage({ stock, orders, onLogout }) {
+function OwnerPage({ stock, orders, customers, onLogout }) {
   const [tab, setTab] = useState('orders');
   const pendingCount  = orders.filter(o => o.status === 'pending').length;
 
   const TABS = [
-    { id: 'orders', label: '📦 Orders',        badge: pendingCount },
-    { id: 'stock',  label: '🏪 Stock' },
-    { id: 'office', label: '🖥️ Office Display' },
+    { id: 'orders',   label: '📦 Orders',   badge: pendingCount },
+    { id: 'stock',    label: '🏪 Stock' },
+    { id: 'salesman', label: '🧾 Salesman' },
+    { id: 'office',   label: '🖥️ Office' },
   ];
 
   return (
-    <div style={{ maxWidth: 620, margin: '0 auto', minHeight: '100vh', paddingBottom: 32 }}>
+    <div style={{ maxWidth: 640, margin: '0 auto', minHeight: '100vh', paddingBottom: 32 }}>
       <div style={{ background: `linear-gradient(135deg,${C.dark} 0%,${C.primary} 100%)`, padding: '20px 20px 0', color: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div>
             <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, margin: 0 }}>Owner Dashboard</h1>
-            <p style={{ margin: '3px 0 0', opacity: 0.75, fontSize: 12, fontWeight: 600 }}>Vijay Enterprises · Business Control</p>
+            <p style={{ margin: '3px 0 0', opacity: 0.75, fontSize: 12, fontWeight: 600 }}>Dost Grocery · Business Control</p>
           </div>
           <button onClick={onLogout} style={{ background: 'rgba(255,255,255,0.18)', border: '1.5px solid rgba(255,255,255,0.3)', color: '#fff', padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'inherit' }}>Logout</button>
         </div>
-        <div style={{ display: 'flex', gap: 2 }}>
+        <div style={{ display: 'flex', gap: 2, overflowX: 'auto' }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ flex: 1, padding: '10px 6px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: tab === t.id ? 800 : 500, fontSize: 12, background: tab === t.id ? '#fff' : 'transparent', color: tab === t.id ? C.dark : 'rgba(255,255,255,0.8)', borderRadius: '10px 10px 0 0', transition: 'all 0.18s' }}>
+              style={{ flex: '0 0 auto', padding: '10px 12px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: tab === t.id ? 800 : 500, fontSize: 12, background: tab === t.id ? '#fff' : 'transparent', color: tab === t.id ? C.dark : 'rgba(255,255,255,0.8)', borderRadius: '10px 10px 0 0', transition: 'all 0.18s', whiteSpace: 'nowrap' }}>
               {t.label}
               {t.badge > 0 && <span style={{ marginLeft: 5, background: '#ef4444', color: '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 900 }}>{t.badge}</span>}
             </button>
@@ -281,9 +328,10 @@ function OwnerPage({ stock, orders, onLogout }) {
         </div>
       </div>
       <div style={{ padding: 16 }}>
-        {tab === 'orders' && <OrdersManager orders={orders} />}
-        {tab === 'stock'  && <StockManager  stock={stock} />}
-        {tab === 'office' && <OfficeDisplay orders={orders} />}
+        {tab === 'orders'   && <OrdersManager orders={orders} />}
+        {tab === 'stock'    && <StockManager  stock={stock} />}
+        {tab === 'salesman' && <SalesmanPanel stock={stock} customers={customers} />}
+        {tab === 'office'   && <OfficeDisplay orders={orders} />}
       </div>
     </div>
   );
@@ -334,7 +382,7 @@ function StockManager({ stock }) {
           {err && <div style={{ color: C.danger, fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{err}</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><label style={lbl}>Product Ka Naam</label>
-              <input style={inp} placeholder="Jaise: Basmati Rice, Amul Butter..." value={f.name || ''} onChange={e => set('name', e.target.value)} />
+              <input style={inp} placeholder="Jaise: Basmati Rice..." value={f.name || ''} onChange={e => set('name', e.target.value)} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div><label style={lbl}>Price (₹)</label>
@@ -347,13 +395,13 @@ function StockManager({ stock }) {
                 </select>
               </div>
             </div>
-            <div><label style={lbl}>Available Stock (Quantity)</label>
+            <div><label style={lbl}>Available Stock</label>
               <input style={inp} type="number" placeholder="100" value={f.quantity || ''} onChange={e => set('quantity', e.target.value)} />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={{ ...mkBtn('outline'), flex: 1 }} onClick={cancel}>Cancel</button>
               <button style={{ ...mkBtn('primary'), flex: 2, opacity: saving ? 0.7 : 1 }} onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : editId ? 'Update Karo ✓' : 'Stock Mein Add Karo ✓'}
+                {saving ? 'Saving...' : editId ? 'Update Karo ✓' : 'Add Karo ✓'}
               </button>
             </div>
           </div>
@@ -362,8 +410,8 @@ function StockManager({ stock }) {
 
       {stock.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 48, color: C.muted }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>📦</div>
-          <p style={{ fontWeight: 700, fontSize: 15 }}>Koi stock nahi abhi.<br />Upar se product add karo.</p>
+          <div style={{ fontSize: 48 }}>📦</div>
+          <p style={{ fontWeight: 700 }}>Koi stock nahi. Upar se add karo.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -388,6 +436,169 @@ function StockManager({ stock }) {
   );
 }
 
+// ── Salesman Panel ─────────────────────────────────────────────────────────
+function SalesmanPanel({ stock, customers }) {
+  const [quantities,     setQuantities]     = useState({});
+  const [customerMobile, setCustomerMobile] = useState('');
+  const [foundCustomer,  setFoundCustomer]  = useState(null);
+  const [custErr,        setCustErr]        = useState('');
+  const [paymentMethod,  setPaymentMethod]  = useState('cash');
+  const [placing,        setPlacing]        = useState(false);
+  const [successMsg,     setSuccessMsg]     = useState('');
+
+  const setQty = (id, val) => {
+    const n = val === '' ? '' : Math.max(0, parseInt(val) || 0);
+    setQuantities(p => ({ ...p, [id]: n }));
+  };
+
+  const searchCustomer = () => {
+    setCustErr(''); setFoundCustomer(null);
+    if (!customerMobile || customerMobile.length < 10) { setCustErr('10-digit mobile daalo'); return; }
+    const c = customers.find(x => x.mobile === customerMobile.trim());
+    if (c) setFoundCustomer(c);
+    else setCustErr('Yeh customer registered nahi hai');
+  };
+
+  const orderItems = stock.filter(p => quantities[p.id] && quantities[p.id] > 0).map(p => ({
+    productId: p.id, name: p.name, price: p.price, unit: p.unit,
+    quantity: +quantities[p.id], subtotal: p.price * +quantities[p.id],
+  }));
+  const orderTotal = orderItems.reduce((s, i) => s + i.subtotal, 0);
+
+  const placeOrder = async () => {
+    if (!foundCustomer) { setCustErr('Pehle customer search karo'); return; }
+    if (!orderItems.length) { alert('Koi bhi product ki quantity nahi likhi!'); return; }
+    setPlacing(true);
+    try {
+      await addDoc(collection(db, 'orders'), {
+        customerId:      foundCustomer.id,
+        customerName:    foundCustomer.name,
+        customerStore:   foundCustomer.storeName,
+        customerAddress: foundCustomer.address,
+        customerMobile:  foundCustomer.mobile,
+        items:           orderItems,
+        total:           orderTotal,
+        status:          'pending',
+        paymentMethod,
+        placedBy:        'salesman',
+        placedAt:        now(),
+        confirmedAt:     null,
+        deliveryDate:    null,
+        deliveredAt:     null,
+      });
+      setSuccessMsg(`✅ ${foundCustomer.storeName} ka order place ho gaya! Total: ${fmt(orderTotal)}`);
+      setQuantities({}); setCustomerMobile(''); setFoundCustomer(null); setCustErr(''); setPaymentMethod('cash');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch { alert('Error aaya, dobara try karo'); }
+    setPlacing(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '12px 16px', background: C.light, borderRadius: 14 }}>
+        <span style={{ fontSize: 28 }}>🧾</span>
+        <div>
+          <div style={{ fontWeight: 900, color: C.dark, fontSize: 15 }}>Salesman Panel</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Customer ke liye seedha order lena</div>
+        </div>
+      </div>
+
+      {successMsg && (
+        <div style={{ background: C.light, border: `2px solid ${C.primary}`, color: C.dark, padding: '12px 16px', borderRadius: 12, marginBottom: 16, fontWeight: 800, fontSize: 14 }}>
+          {successMsg}
+        </div>
+      )}
+
+      {/* Customer Search */}
+      <div style={{ ...mkCard, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 12px', fontWeight: 800, color: C.dark, fontSize: 15 }}>👤 Customer Dhundho</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={{ ...inp, flex: 1 }} type="tel" placeholder="Customer ka mobile no." maxLength={10}
+            value={customerMobile} onChange={e => { setCustomerMobile(e.target.value); setCustErr(''); setFoundCustomer(null); }} />
+          <button style={{ ...mkBtn('primary'), whiteSpace: 'nowrap' }} onClick={searchCustomer}>Search</button>
+        </div>
+        {custErr && <div style={{ color: C.danger, fontSize: 13, fontWeight: 700, marginTop: 8 }}>{custErr}</div>}
+        {foundCustomer && (
+          <div style={{ marginTop: 10, background: C.light, borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ fontWeight: 900, color: C.dark }}>{foundCustomer.storeName}</div>
+            <div style={{ fontSize: 13, color: C.muted }}>{foundCustomer.name} · 📞 {foundCustomer.mobile}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>📍 {foundCustomer.address}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Stock List with Direct Input */}
+      <div style={{ ...mkCard, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 14px', fontWeight: 800, color: C.dark, fontSize: 15 }}>📦 Products & Quantity</h3>
+        {stock.length === 0 ? (
+          <p style={{ color: C.muted, fontWeight: 600 }}>Stock mein koi product nahi</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {stock.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px dashed ${C.border}` }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{fmt(p.price)} / {p.unit}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={quantities[p.id] === undefined ? '' : quantities[p.id]}
+                    onChange={e => setQty(p.id, e.target.value)}
+                    style={{ ...inp, width: 80, textAlign: 'center', fontWeight: 800, fontSize: 16, padding: '8px 10px' }}
+                  />
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 700, minWidth: 30 }}>{p.unit}</span>
+                </div>
+                {quantities[p.id] > 0 && (
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.dark, minWidth: 70, textAlign: 'right' }}>
+                    {fmt(p.price * quantities[p.id])}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Payment Method */}
+      <div style={{ ...mkCard, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 12px', fontWeight: 800, color: C.dark, fontSize: 15 }}>💳 Payment Method</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setPaymentMethod('cash')}
+            style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `2px solid ${paymentMethod === 'cash' ? C.primary : C.border}`, background: paymentMethod === 'cash' ? C.light : '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', color: paymentMethod === 'cash' ? C.dark : C.muted, transition: 'all 0.18s' }}>
+            💵 Cash
+          </button>
+          <button onClick={() => setPaymentMethod('upi')}
+            style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `2px solid ${paymentMethod === 'upi' ? '#7c3aed' : C.border}`, background: paymentMethod === 'upi' ? '#ede9fe' : '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', color: paymentMethod === 'upi' ? '#7c3aed' : C.muted, transition: 'all 0.18s' }}>
+            📲 UPI
+          </button>
+        </div>
+      </div>
+
+      {/* Order Summary + Place */}
+      {orderItems.length > 0 && (
+        <div style={{ ...mkCard, borderColor: C.primary, borderWidth: 2 }}>
+          <div style={{ fontWeight: 800, color: C.dark, marginBottom: 8 }}>📋 Order Summary</div>
+          {orderItems.map((it, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: C.muted }}>
+              <span>{it.name} × {it.quantity} {it.unit}</span>
+              <span style={{ fontWeight: 700, color: C.dark }}>{fmt(it.subtotal)}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 18, color: C.dark, margin: '12px 0', borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+            <span>Total</span><span>{fmt(orderTotal)}</span>
+          </div>
+          <button style={{ ...mkBtn('primary'), width: '100%', padding: 14, fontSize: 16, opacity: placing ? 0.7 : 1 }} onClick={placeOrder} disabled={placing}>
+            {placing ? 'Place ho raha hai...' : `✅ Order Place Karo · ${paymentMethod === 'cash' ? '💵 Cash' : '📲 UPI'}`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Orders Manager ─────────────────────────────────────────────────────────
 function OrdersManager({ orders }) {
   const [filter,       setFilter]       = useState('pending');
@@ -400,15 +611,10 @@ function OrdersManager({ orders }) {
 
   const doConfirm = async () => {
     if (!deliveryDate) { alert('Delivery date daalna zaroori hai!'); return; }
-    await updateDoc(doc(db, 'orders', confirmOrder.id), {
-      status: 'confirmed', confirmedAt: now(), deliveryDate,
-    });
+    await updateDoc(doc(db, 'orders', confirmOrder.id), { status: 'confirmed', confirmedAt: now(), deliveryDate });
     setConfirmOrder(null); setDeliveryDate('');
   };
-
-  const doDeliver = async id => {
-    await updateDoc(doc(db, 'orders', id), { status: 'delivered', deliveredAt: now() });
-  };
+  const doDeliver = async id => updateDoc(doc(db, 'orders', id), { status: 'delivered', deliveredAt: now() });
 
   const STATUS = {
     pending:   { color: 'amber', label: '⏳ Pending' },
@@ -424,12 +630,12 @@ function OrdersManager({ orders }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ ...mkCard, width: '100%', maxWidth: 380 }}>
             <h3 style={{ margin: '0 0 6px', fontWeight: 900, color: C.dark }}>✅ Order Confirm Karo</h3>
-            <p style={{ margin: '0 0 16px', color: C.muted, fontSize: 14 }}><strong>{confirmOrder.customerStore}</strong> — {confirmOrder.customerName}</p>
-            <label style={lbl}>Delivery Date Set Karo</label>
+            <p style={{ margin: '0 0 16px', color: C.muted, fontSize: 14 }}><strong>{confirmOrder.customerStore}</strong></p>
+            <label style={lbl}>Delivery Date</label>
             <input type="date" style={inp} value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button style={{ ...mkBtn('outline'), flex: 1 }} onClick={() => setConfirmOrder(null)}>Cancel</button>
-              <button style={{ ...mkBtn('primary'), flex: 2 }} onClick={doConfirm}>Confirm + Date Save ✓</button>
+              <button style={{ ...mkBtn('primary'), flex: 2 }} onClick={doConfirm}>Confirm ✓</button>
             </div>
           </div>
         </div>
@@ -443,7 +649,8 @@ function OrdersManager({ orders }) {
               <div>
                 <div style={{ fontWeight: 900, fontSize: 17, color: C.dark }}>{detailOrder.customerStore}</div>
                 <div style={{ fontSize: 13, color: C.muted }}>{detailOrder.customerName} · 📞 {detailOrder.customerMobile}</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>📍 {detailOrder.customerAddress}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>📍 {detailOrder.customerAddress}</div>
+                <div style={{ marginTop: 6 }}><PayBadge method={detailOrder.paymentMethod || 'cash'} /></div>
               </div>
               <button onClick={() => setDetailOrder(null)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: C.muted }}>✕</button>
             </div>
@@ -455,12 +662,12 @@ function OrdersManager({ orders }) {
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 18, color: C.dark, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 18, color: C.dark }}>
               <span>Total</span><span>{fmt(detailOrder.total)}</span>
             </div>
             {detailOrder.deliveryDate && (
-              <div style={{ background: C.light, color: C.dark, padding: '10px 12px', borderRadius: 10, fontWeight: 700, fontSize: 14 }}>
-                🚚 Delivery Date: {fmtDate(detailOrder.deliveryDate + 'T00:00:00')}
+              <div style={{ background: C.light, color: C.dark, padding: '10px 12px', borderRadius: 10, fontWeight: 700, fontSize: 14, marginTop: 12 }}>
+                🚚 Delivery: {fmtDate(detailOrder.deliveryDate + 'T00:00:00')}
               </div>
             )}
           </div>
@@ -487,7 +694,6 @@ function OrdersManager({ orders }) {
         ))}
       </div>
 
-      {/* List */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>
           <div style={{ fontSize: 40 }}>📭</div>
@@ -501,6 +707,10 @@ function OrdersManager({ orders }) {
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 15 }}>{o.customerStore}</div>
                   <div style={{ fontSize: 13, color: C.muted }}>👤 {o.customerName} · 📞 {o.customerMobile}</div>
+                  <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <PayBadge method={o.paymentMethod || 'cash'} />
+                    {o.placedBy === 'salesman' && <span style={{ ...mkBadge('gray'), fontSize: 10 }}>🧾 Salesman</span>}
+                  </div>
                 </div>
                 <span style={mkBadge(STATUS[o.status].color)}>{STATUS[o.status].label}</span>
               </div>
@@ -536,8 +746,12 @@ function OfficeDisplay({ orders }) {
           <div style={{ fontWeight: 900, fontSize: 15 }}>{o.customerStore}</div>
           <div style={{ fontSize: 13, color: C.muted }}>👤 {o.customerName} · 📞 {o.customerMobile}</div>
           <div style={{ fontSize: 12, color: C.muted }}>📍 {o.customerAddress}</div>
+          <div style={{ marginTop: 5, display: 'flex', gap: 6 }}>
+            <PayBadge method={o.paymentMethod || 'cash'} />
+            {o.placedBy === 'salesman' && <span style={{ background: '#f3f4f6', color: C.muted, padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800 }}>🧾 Salesman</span>}
+          </div>
         </div>
-        <div style={{ fontWeight: 900, color: C.dark, fontSize: 16, flexShrink: 0, marginLeft: 8 }}>{fmt(o.total)}</div>
+        <div style={{ fontWeight: 900, color: C.dark, fontSize: 16 }}>{fmt(o.total)}</div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, margin: '8px 0' }}>
         {o.items.map((it, i) => (
@@ -551,7 +765,7 @@ function OfficeDisplay({ orders }) {
           📅 Delivery: {fmtDate(o.deliveryDate + 'T00:00:00')}
         </div>
       )}
-      <div style={{ marginTop: 6, fontSize: 11, color: C.muted }}>Order aaya: {fmtDT(o.placedAt)}</div>
+      <div style={{ marginTop: 6, fontSize: 11, color: C.muted }}>Order: {fmtDT(o.placedAt)}</div>
     </div>
   );
 
@@ -561,22 +775,20 @@ function OfficeDisplay({ orders }) {
         <span style={{ fontSize: 28 }}>🖥️</span>
         <div>
           <div style={{ fontWeight: 900, color: C.dark }}>Office Display</div>
-          <div style={{ fontSize: 12, color: C.muted }}>Dispatch team ke liye — sab pending aur confirmed orders</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Dispatch team ke liye</div>
         </div>
       </div>
 
       <h3 style={{ fontWeight: 800, color: '#92400e', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        ⏳ Naye Orders
-        <span style={{ background: C.accentLight, color: '#92400e', padding: '2px 10px', borderRadius: 20, fontSize: 13 }}>{pending.length}</span>
+        ⏳ Naye Orders <span style={{ background: C.accentLight, color: '#92400e', padding: '2px 10px', borderRadius: 20, fontSize: 13 }}>{pending.length}</span>
       </h3>
       {pending.length === 0
-        ? <p style={{ color: C.muted, fontSize: 14, marginBottom: 20, fontWeight: 600 }}>Koi naya order nahi abhi</p>
+        ? <p style={{ color: C.muted, fontSize: 14, marginBottom: 20, fontWeight: 600 }}>Koi naya order nahi</p>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>{pending.map(o => <OCard key={o.id} o={o} type="new" />)}</div>
       }
 
       <h3 style={{ fontWeight: 800, color: C.dark, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        ✅ Confirmed Orders
-        <span style={{ background: C.light, color: C.dark, padding: '2px 10px', borderRadius: 20, fontSize: 13 }}>{confirmed.length}</span>
+        ✅ Confirmed <span style={{ background: C.light, color: C.dark, padding: '2px 10px', borderRadius: 20, fontSize: 13 }}>{confirmed.length}</span>
       </h3>
       {confirmed.length === 0
         ? <p style={{ color: C.muted, fontSize: 14, fontWeight: 600 }}>Koi confirmed order nahi</p>
@@ -591,6 +803,7 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
   const [view,        setView]        = useState('shop');
   const [showCart,    setShowCart]    = useState(false);
   const [justOrdered, setJustOrdered] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
   const myOrders  = [...orders].filter(o => o.customerId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
   const newNotifs = myOrders.filter(o => o.status === 'confirmed').length;
@@ -610,20 +823,13 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
   const placeOrder = async () => {
     if (!cart.length) return;
     await addDoc(collection(db, 'orders'), {
-      customerId:      user.id,
-      customerName:    user.name,
-      customerStore:   user.storeName,
-      customerAddress: user.address,
-      customerMobile:  user.mobile,
-      items:           cart,
-      total:           cartTotal,
-      status:          'pending',
-      placedAt:        now(),
-      confirmedAt:     null,
-      deliveryDate:    null,
-      deliveredAt:     null,
+      customerId: user.id, customerName: user.name, customerStore: user.storeName,
+      customerAddress: user.address, customerMobile: user.mobile,
+      items: cart, total: cartTotal, status: 'pending',
+      paymentMethod, placedBy: 'customer',
+      placedAt: now(), confirmedAt: null, deliveryDate: null, deliveredAt: null,
     });
-    setCart([]); setShowCart(false); setJustOrdered(true);
+    setCart([]); setShowCart(false); setJustOrdered(true); setPaymentMethod('cash');
     setTimeout(() => setJustOrdered(false), 4000);
     setView('myorders');
   };
@@ -656,7 +862,7 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
         <div style={{ display: 'flex', gap: 4 }}>
           {[{ id: 'shop', label: '🏪 Shopping' }, { id: 'myorders', label: '📦 Mere Orders' }].map(t => (
             <button key={t.id} onClick={() => setView(t.id)}
-              style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: view === t.id ? 800 : 500, fontSize: 13, background: view === t.id ? '#fff' : 'transparent', color: view === t.id ? C.dark : 'rgba(255,255,255,0.8)', borderRadius: '10px 10px 0 0', transition: 'all 0.18s', position: 'relative' }}>
+              style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: view === t.id ? 800 : 500, fontSize: 13, background: view === t.id ? '#fff' : 'transparent', color: view === t.id ? C.dark : 'rgba(255,255,255,0.8)', borderRadius: '10px 10px 0 0', transition: 'all 0.18s' }}>
               {t.label}
               {t.id === 'myorders' && newNotifs > 0 && <span style={{ marginLeft: 4, background: '#ef4444', color: '#fff', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 900 }}>{newNotifs}</span>}
             </button>
@@ -673,11 +879,12 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
       {/* Cart Drawer */}
       {showCart && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div style={{ ...mkCard, width: '100%', maxWidth: 620, maxHeight: '88vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 20 }}>
+          <div style={{ ...mkCard, width: '100%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontWeight: 900, color: C.dark }}>🛒 Aapka Cart</h3>
-              <button onClick={() => setShowCart(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <button onClick={() => setShowCart(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
+
             {cart.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted }}>
                 <div style={{ fontSize: 44 }}>🛒</div>
@@ -693,14 +900,32 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontWeight: 900, color: C.dark }}>{fmt(item.subtotal)}</span>
-                      <button onClick={() => setQty({ id: item.productId, name: item.name, price: item.price, unit: item.unit }, 0)} style={{ background: C.dangerLight, color: C.danger, border: 'none', borderRadius: 7, width: 28, height: 28, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                      <button onClick={() => setQty({ id: item.productId, name: item.name, price: item.price, unit: item.unit }, 0)} style={{ background: C.dangerLight, color: C.danger, border: 'none', borderRadius: 7, width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>✕</button>
                     </div>
                   </div>
                 ))}
+
+                {/* Payment Method Selection */}
+                <div style={{ margin: '16px 0 8px' }}>
+                  <div style={{ fontWeight: 800, color: C.dark, fontSize: 14, marginBottom: 10 }}>💳 Payment Method</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setPaymentMethod('cash')}
+                      style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `2px solid ${paymentMethod === 'cash' ? C.primary : C.border}`, background: paymentMethod === 'cash' ? C.light : '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', color: paymentMethod === 'cash' ? C.dark : C.muted, transition: 'all 0.18s' }}>
+                      💵 Cash
+                    </button>
+                    <button onClick={() => setPaymentMethod('upi')}
+                      style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: `2px solid ${paymentMethod === 'upi' ? '#7c3aed' : C.border}`, background: paymentMethod === 'upi' ? '#ede9fe' : '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', color: paymentMethod === 'upi' ? '#7c3aed' : C.muted, transition: 'all 0.18s' }}>
+                      📲 UPI
+                    </button>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', fontWeight: 900, fontSize: 19, color: C.dark }}>
                   <span>Total</span><span>{fmt(cartTotal)}</span>
                 </div>
-                <button style={{ ...mkBtn('primary'), width: '100%', padding: 14, fontSize: 16 }} onClick={placeOrder}>✅ Order Place Karo</button>
+                <button style={{ ...mkBtn('primary'), width: '100%', padding: 14, fontSize: 16 }} onClick={placeOrder}>
+                  ✅ Order Place Karo · {paymentMethod === 'cash' ? '💵 Cash' : '📲 UPI'}
+                </button>
               </>
             )}
           </div>
@@ -731,9 +956,9 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
                         <button onClick={() => setQty(p, 1)} style={{ ...mkBtn('primary'), padding: '8px 18px', fontSize: 14 }}>+ Add</button>
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.light, borderRadius: 12, padding: '4px 6px' }}>
-                          <button onClick={() => setQty(p, qty - 1)} style={{ background: '#fff', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontWeight: 900, fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.dark }}>−</button>
+                          <button onClick={() => setQty(p, qty - 1)} style={{ background: '#fff', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontWeight: 900, fontSize: 20, color: C.dark }}>−</button>
                           <span style={{ fontWeight: 900, minWidth: 26, textAlign: 'center', color: C.dark, fontSize: 16 }}>{qty}</span>
-                          <button onClick={() => setQty(p, qty + 1)} style={{ background: C.primary, border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontWeight: 900, fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>+</button>
+                          <button onClick={() => setQty(p, qty + 1)} style={{ background: C.primary, border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontWeight: 900, fontSize: 20, color: '#fff' }}>+</button>
                         </div>
                       )}
                     </div>
@@ -760,6 +985,7 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 15, color: C.dark }}>{o.items.length} item(s) · {fmt(o.total)}</div>
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>🕐 {fmtDT(o.placedAt)}</div>
+                        <div style={{ marginTop: 4 }}><PayBadge method={o.paymentMethod || 'cash'} /></div>
                       </div>
                       <span style={mkBadge(STATUS[o.status].color)}>{STATUS[o.status].label}</span>
                     </div>
@@ -770,13 +996,13 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
                     </div>
                     {o.status === 'confirmed' && o.deliveryDate && (
                       <div style={{ background: C.light, color: C.dark, padding: '12px 14px', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                        🎉 Aapka order confirm ho gaya!
+                        🎉 Order confirm ho gaya!
                         <div style={{ marginTop: 4, fontSize: 15, color: C.primary }}>📅 Delivery: {fmtDate(o.deliveryDate + 'T00:00:00')}</div>
                       </div>
                     )}
                     {o.status === 'pending' && (
                       <div style={{ background: C.accentLight, color: '#92400e', padding: '9px 12px', borderRadius: 10, fontSize: 13, fontWeight: 700 }}>
-                        ⏳ Owner review kar raha hai aapka order...
+                        ⏳ Owner review kar raha hai...
                       </div>
                     )}
                     {o.status === 'delivered' && (
