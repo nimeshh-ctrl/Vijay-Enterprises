@@ -3,7 +3,7 @@ import {
   collection, doc, onSnapshot,
   addDoc, updateDoc, deleteDoc,
 } from "firebase/firestore";
-import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import upiQR from "./assets/upi-qr.jpg";
 import { db, auth } from "./firebase";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -12,6 +12,7 @@ const fmtDate = s  => s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digi
 const fmtDT   = s  => s ? new Date(s).toLocaleString('en-IN',     { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 const now     = () => new Date().toISOString();
 const billNo  = () => 'VE-' + Date.now().toString().slice(-5);
+const isValidIndianMobile = (num) => /^[6-9]\d{9}$/.test(num);
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 const C = {
@@ -91,7 +92,20 @@ export default function App() {
       button:active { opacity: 0.88; transform: scale(0.97); }
       ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #bbf7d0; border-radius: 4px; }
     `;
-    document.head.appendChild(st);
+    
+st.textContent += `
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+button:hover {
+  transform: translateY(-2px);
+  transition: all 0.2s ease;
+}
+`;
+document.head.appendChild(st);
+
     const sess = localStorage.getItem('groc_session');
     if (sess) { const u = JSON.parse(sess); setUser(u); setPage(u.type === 'owner' ? 'owner' : 'customer'); }
     else setPage('auth');
@@ -115,7 +129,7 @@ export default function App() {
 
   return (
     <div style={wrap}>
-      <div id="recaptcha-container" style={{ position: 'fixed', bottom: 0, left: 0, zIndex: 9999 }}></div>
+      
       {page === 'auth'     && <AuthPage customers={customers} onLogin={doLogin} />}
       {page === 'owner'    && <OwnerPage stock={stock} orders={orders} customers={customers} onLogout={doLogout} />}
       {page === 'customer' && <CustomerPage user={user} stock={stock} orders={orders} cart={cart} setCart={setCart} onLogout={doLogout} />}
@@ -131,8 +145,7 @@ function AuthPage({ customers, onLogin }) {
   const [ok,       setOk]       = useState('');
   const [loading,  setLoading]  = useState(false);
   const [logoTaps, setLogoTaps] = useState(0);
-  const [stage,    setStage]    = useState('form'); // 'form' | 'otp'
-  const [otp,      setOtp]      = useState('');
+
   const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setErr(''); };
 
   const handleLogoTap = () => {
@@ -141,61 +154,58 @@ function AuthPage({ customers, onLogin }) {
   };
 
   const handleCustLogin = () => {
-    if (!f.mobile || f.mobile.length < 10) { setErr('Valid 10-digit mobile daalo'); return; }
+    if (!isValidIndianMobile(f.mobile)) { setErr('Valid 10-digit mobile daalo'); return; }
     const c = customers.find(x => x.mobile === f.mobile.trim());
     if (!c) { setErr('Mobile nahi mila. Pehle Sign Up karo.'); return; }
     onLogin({ type: 'customer', ...c });
   };
 
-  // ── OTP: Send ──
-  const handleSendOTP = async () => {
+  
+const handleSignup = async () => {
     const { name, storeName, address, mobile } = f;
-    if (!name?.trim() || !storeName?.trim() || !address?.trim() || !mobile?.trim()) { setErr('Sab fields bharna zaroori hai!'); return; }
-    if (!/^\d{10}$/.test(mobile)) { setErr('10-digit mobile number daalo'); return; }
-    if (customers.find(c => c.mobile === mobile)) { setErr('Yeh mobile already registered hai. Login karo.'); return; }
-    setLoading(true); setErr('');
-    try {
-      // Full cleanup before creating new verifier
-      if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch {}
-        window.recaptchaVerifier = null;
-      }
-      const container = document.getElementById('recaptcha-container');
-      if (container) container.innerHTML = '';
 
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {},
-        'expired-callback': () => { window.recaptchaVerifier = null; },
-      });
-      await window.recaptchaVerifier.render();
-      const result = await signInWithPhoneNumber(auth, '+91' + mobile.trim(), window.recaptchaVerifier);
-      window.confirmationResult = result;
-      setStage('otp');
-    } catch (e) {
-      setErr('OTP nahi gaya: ' + (e?.message || 'Dobara try karo'));
-      if (window.recaptchaVerifier) { try { window.recaptchaVerifier.clear(); } catch {} window.recaptchaVerifier = null; }
-      const c2 = document.getElementById('recaptcha-container'); if (c2) c2.innerHTML = '';
+    if (!name?.trim() || !storeName?.trim() || !address?.trim() || !mobile?.trim()) {
+      setErr('Sab fields bharna zaroori hai!');
+      return;
     }
+
+    if (!isValidIndianMobile(mobile)) {
+      setErr('Valid Indian mobile number daalo');
+      return;
+    }
+
+    if (customers.find(c => c.mobile === mobile)) {
+      setErr('Yeh mobile already registered hai.');
+      return;
+    }
+
+    setLoading(true);
+    setErr('');
+
+    try {
+      await addDoc(collection(db, 'customers'), {
+        name: f.name.trim(),
+        storeName: f.storeName.trim(),
+        address: f.address.trim(),
+        mobile: f.mobile,
+        createdAt: now(),
+      });
+
+      setOk('✅ Account ban gaya! Ab Login karo.');
+      setF({});
+
+      setTimeout(() => {
+        setOk('');
+        setTab('login');
+      }, 2500);
+
+    } catch {
+      setErr('Error aaya, dobara try karo');
+    }
+
     setLoading(false);
   };
 
-  // ── OTP: Verify ──
-  const handleVerifyOTP = async () => {
-    if (!otp || otp.length < 6) { setErr('6-digit OTP daalo'); return; }
-    setLoading(true); setErr('');
-    try {
-      await window.confirmationResult.confirm(otp);
-      await addDoc(collection(db, 'customers'), {
-        name: f.name.trim(), storeName: f.storeName.trim(),
-        address: f.address.trim(), mobile: f.mobile, createdAt: now(),
-      });
-      setOk('✅ Account ban gaya! Ab Login karo.');
-      setF({}); setOtp(''); setStage('form');
-      setTimeout(() => { setOk(''); setTab('login'); }, 2500);
-    } catch { setErr('Galat OTP hai. Dobara check karo.'); }
-    setLoading(false);
-  };
 
   const handleOwnerLogin = () => {
     if (f.username === 'admin' && f.password === 'grocery123') onLogin({ type: 'owner', name: 'Admin' });
@@ -237,35 +247,19 @@ function AuthPage({ customers, onLogin }) {
           </div>
         )}
 
-        {tab==='signup' && stage==='form' && (
+        {tab==='signup' && (
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             <div><label style={lbl}>Aapka Naam</label><input style={inp} placeholder="Ramesh Kumar" value={f.name||''} onChange={e=>set('name',e.target.value)} /></div>
             <div><label style={lbl}>Dukan / Store ka Naam</label><input style={inp} placeholder="Kumar Kirana Store" value={f.storeName||''} onChange={e=>set('storeName',e.target.value)} /></div>
             <div><label style={lbl}>Poora Address</label><textarea style={{ ...inp, resize:'none', height:72 }} placeholder="Gali, mohalla, sheher..." value={f.address||''} onChange={e=>set('address',e.target.value)} /></div>
             <div><label style={lbl}>Mobile Number</label><input style={inp} type="tel" placeholder="10-digit (OTP aayega)" maxLength={10} value={f.mobile||''} onChange={e=>set('mobile',e.target.value)} /></div>
-            <button style={{ ...mkBtn('primary'), width:'100%', padding:13, fontSize:15, opacity:loading?0.7:1 }} onClick={handleSendOTP} disabled={loading}>
+            <button style={{ ...mkBtn('primary'), width:'100%', padding:13, fontSize:15, opacity:loading?0.7:1 }} onClick={handleSignup} disabled={loading}>
               {loading ? '⏳ OTP bhej raha hun...' : '📱 OTP Bhejo'}
             </button>
           </div>
         )}
 
-        {tab==='signup' && stage==='otp' && (
-          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            <div style={{ background:C.light, color:C.dark, padding:'12px 14px', borderRadius:12, fontSize:13, fontWeight:700 }}>
-              📱 OTP bheja gaya: +91 {f.mobile}
-            </div>
-            <div><label style={lbl}>6-digit OTP Daalo</label>
-              <input style={{ ...inp, fontSize:24, letterSpacing:10, textAlign:'center', fontWeight:900 }}
-                type="tel" placeholder="••••••" maxLength={6} value={otp} onChange={e=>{ setOtp(e.target.value); setErr(''); }} />
-            </div>
-            <button style={{ ...mkBtn('primary'), width:'100%', padding:13, fontSize:15, opacity:loading?0.7:1 }} onClick={handleVerifyOTP} disabled={loading}>
-              {loading ? 'Verify ho raha hai...' : 'Verify Karo ✓'}
-            </button>
-            <button style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, fontFamily:'inherit', fontWeight:700 }} onClick={()=>{ setStage('form'); setOtp(''); setErr(''); }}>
-              ← Wapas jao / OTP dobara bhejo
-            </button>
-          </div>
-        )}
+        
 
         {tab==='owner' && (
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -568,7 +562,40 @@ function SalesmanPanel({ stock }) {
       {/* ── Payment ── */}
       <div style={mkCard}>
         <h3 style={{ margin:'0 0 12px', fontWeight:800, color:C.dark, fontSize:15 }}>💳 Payment</h3>
-        <PayToggle value={paymentMethod} onChange={setPaymentMethod} />
+        
+<PayToggle value={paymentMethod} onChange={setPaymentMethod} />
+
+            {paymentMethod === 'upi' && (
+              <div style={{
+                marginTop: 16,
+                background: '#fff',
+                borderRadius: 16,
+                padding: 18,
+                textAlign: 'center',
+                border: `2px solid ${C.upiLight}`,
+                animation: 'fadeIn 0.35s ease'
+              }}>
+                <img
+                  src={upiQR}
+                  alt="UPI QR"
+                  style={{
+                    width: '100%',
+                    maxWidth: 260,
+                    borderRadius: 14,
+                    marginBottom: 14
+                  }}
+                />
+
+                <div style={{
+                  fontWeight: 900,
+                  color: C.upi,
+                  fontSize: 17
+                }}>
+                  Q242432638@ybl
+                </div>
+              </div>
+            )}
+
 
         {/* Partial Payment */}
         <div style={{ marginTop:14 }}>
@@ -667,10 +694,14 @@ function OrdersManager({ orders }) {
                 <div style={{ fontWeight:900, fontSize:17, color:C.dark }}>{detailOrder.customerStore||detailOrder.customerName}</div>
                 <div style={{ fontSize:13, color:C.muted }}>{detailOrder.customerName} · 📞 {detailOrder.customerMobile}</div>
                 <div style={{ fontSize:12, color:C.muted }}>📍 {detailOrder.customerAddress}</div>
-                <div style={{ marginTop:6, display:'flex', gap:6}}>
-                  <PayBadge method={detailOrder.paymentMethod||'cash'} />
-                  {detailOrder.placedBy==='salesman' && <span style={{ ...mkBadge('gray'), fontSize:10 }}>🧾 Salesman</span>}
-                </div>
+               <div style={{ marginTop:6, display:'flex', gap:6 }}>
+  <PayBadge method={detailOrder.paymentMethod || 'cash'} />
+  {detailOrder.placedBy==='salesman' && (
+    <span style={{ ...mkBadge('gray'), fontSize:10 }}>
+      🧾 Salesman
+    </span>
+  )}
+</div>
               </div>
               <button onClick={()=>setDetailOrder(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.muted }}>✕</button>
             </div>
