@@ -1030,4 +1030,3 @@ function CustomerPage({ user, stock, orders, cart, setCart, onLogout }) {
     </div>
   );
 }
-console.log("NEW CHANGE TEST")
