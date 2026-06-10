@@ -13,6 +13,7 @@ const fmtDT   = s  => s ? new Date(s).toLocaleString('en-IN',     { day: '2-digi
 const now     = () => new Date().toISOString();
 const billNo  = () => 'VE-' + Date.now().toString().slice(-5);
 const isValidIndianMobile = (num) => /^[6-9]\d{9}$/.test(num);
+const getOrderItems = order => Array.isArray(order?.items) ? order.items : [];
 
 // â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
@@ -304,6 +305,7 @@ function SalesmanBillingPanel({ stock, customers }) {
   const [placing, setPlacing] = useState(false);
   const [successBill, setSuccessBill] = useState(null);
   const [err, setErr] = useState('');
+  const [draftBillNumber, setDraftBillNumber] = useState(billNo());
 
   const sortedCustomers = [...customers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const searchNeedle = customerSearch.trim().toLowerCase();
@@ -317,6 +319,7 @@ function SalesmanBillingPanel({ stock, customers }) {
   const selectCustomer = customer => {
     setSelectedCustomer(customer);
     setCustomerSearch(customer.name || customer.storeName || customer.mobile || '');
+    setDraftBillNumber(billNo());
     setErr('');
   };
 
@@ -358,6 +361,7 @@ function SalesmanBillingPanel({ stock, customers }) {
     setQuantities({});
     setPaymentMethod('cash');
     setPaidAmount('');
+    setDraftBillNumber(billNo());
     setErr('');
   };
 
@@ -368,7 +372,7 @@ function SalesmanBillingPanel({ stock, customers }) {
     setPlacing(true);
     setErr('');
     try {
-      const bn = billNo();
+      const bn = draftBillNumber || billNo();
       const orderRef = doc(collection(db, 'orders'));
       const customerName = (selectedCustomer.name || '').trim();
       const customerStore = (selectedCustomer.storeName || '').trim();
@@ -544,7 +548,7 @@ function SalesmanBillingPanel({ stock, customers }) {
                   <div style={{ fontWeight:900, color:C.dark }}>{selectedCustomer.storeName || selectedCustomer.name}</div>
                   <div style={{ fontSize:13, color:C.muted }}>{selectedCustomer.name} Â· {selectedCustomer.mobile}</div>
                 </div>
-                <div style={{ fontSize:12, fontWeight:800, color:C.primary }}>Bill #{billNo()}</div>
+                <div style={{ fontSize:12, fontWeight:800, color:C.primary }}>Bill #{draftBillNumber}</div>
               </div>
             </div>
             {orderItems.length === 0
@@ -655,8 +659,8 @@ function OrdersManager({ orders }) {
               <button onClick={()=>setDetailOrder(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.muted }}>âœ•</button>
             </div>
             <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:12, marginBottom:12 }}>
-              {detailOrder.items.map((it,i) => (
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom: i<detailOrder.items.length-1?`1px dashed ${C.border}`:'none', fontSize:14 }}>
+              {getOrderItems(detailOrder).map((it,i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom: i<getOrderItems(detailOrder).length-1?`1px dashed ${C.border}`:'none', fontSize:14 }}>
                   <span style={{ fontWeight:600 }}>{it.name} <span style={{ color:C.muted }}>({it.quantity} {it.unit})</span></span>
                   <span style={{ fontWeight:800, color:C.dark }}>{fmt(it.subtotal)}</span>
                 </div>
@@ -704,7 +708,10 @@ function OrdersManager({ orders }) {
       {filtered.length===0
         ? <div style={{ textAlign:'center', padding:40, color:C.muted }}><div style={{ fontSize:40 }}>ðŸ“­</div><p style={{ fontWeight:700 }}>Koi order nahi</p></div>
         : <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            {filtered.map(o => (
+            {filtered.map(o => {
+              const items = getOrderItems(o);
+              const status = STATUS[o.status] || { color:'gray', label:o.status || 'Saved' };
+              return (
               <div key={o.id} style={{ ...mkCard, padding:'14px 16px', borderLeft:`4px solid ${o.status==='confirmed'?C.primary:o.status==='pending'?C.accent:C.muted}` }}>
                 {o.billNumber && <div style={{ fontSize:11, fontWeight:700, color:C.primary, marginBottom:4 }}>Bill #{o.billNumber}</div>}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
@@ -716,9 +723,9 @@ function OrdersManager({ orders }) {
                       {o.placedBy==='salesman' && <span style={{ ...mkBadge('gray'), fontSize:10 }}>ðŸ§¾ Salesman</span>}
                     </div>
                   </div>
-                  <span style={mkBadge(STATUS[o.status].color)}>{STATUS[o.status].label}</span>
+                  <span style={mkBadge(status.color)}>{status.label}</span>
                 </div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>{o.items.length} item(s) Â· {fmtDT(o.placedAt)}</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>{items.length} item(s) Â· {fmtDT(o.placedAt)}</div>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <div>
                     <span style={{ fontWeight:900, color:C.dark, fontSize:17 }}>{fmt(o.total)}</span>
@@ -731,7 +738,8 @@ function OrdersManager({ orders }) {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
       }
     </div>

@@ -85,11 +85,11 @@ npm run dev
 Browser mein khulega: http://localhost:5173
 
 Test karo:
-- ✅ Owner login (logo pe 5 tap → admin / grocery123)
-- ✅ Stock add karo
-- ✅ Customer signup karo
-- ✅ Order place karo
-- ✅ Order confirm karo
+- ✅ Owner login direct: `admin / grocery123`
+- ✅ Stock add/edit karo aur live quantity update dekho
+- ✅ Office page par customer details pre-save karo
+- ✅ Salesman page par customer search karke bill save karo
+- ✅ Office page par saved bills/orders list mein dekho
 
 ---
 
@@ -122,7 +122,7 @@ Firebase Console → Firestore → Rules tab mein yeh paste karo:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Stock — sabhi padh saken, sirf authenticated (future)
+    // Stock — live inventory
     match /stock/{doc} {
       allow read: if true;
       allow write: if true; // baad mein restrict karein
@@ -174,5 +174,4 @@ if (f.username === 'APNA_USERNAME' && f.password === 'APNA_PASSWORD')
 - Product categories
 
 ---
-
 
