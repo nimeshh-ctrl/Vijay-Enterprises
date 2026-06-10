@@ -6,16 +6,16 @@ import {
 import upiQR from "./assets/upi-qr.jpg";
 import { db } from "./firebase";
 
-// â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const fmt     = n  => `â‚¹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = s  => s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'â€”';
-const fmtDT   = s  => s ? new Date(s).toLocaleString('en-IN',     { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'â€”';
+// Utilities
+const fmt     = n  => `Rs. ${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDate = s  => s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+const fmtDT   = s  => s ? new Date(s).toLocaleString('en-IN',     { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
 const now     = () => new Date().toISOString();
 const billNo  = () => 'VE-' + Date.now().toString().slice(-5);
 const isValidIndianMobile = (num) => /^[6-9]\d{9}$/.test(num);
 const getOrderItems = order => Array.isArray(order?.items) ? order.items : [];
 
-// â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Theme
 const C = {
   bg: '#f0fdf4', card: '#ffffff', primary: '#16a34a', dark: '#14532d',
   light: '#dcfce7', border: '#bbf7d0', accent: '#d97706', accentLight: '#fef3c7',
@@ -44,13 +44,13 @@ const mkBadge = color => ({
   color: color === 'green' ? C.dark : color === 'amber' ? '#92400e' : C.muted,
 });
 
-// â”€â”€ Payment Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Payment Toggle
 function PayToggle({ value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 10 }}>
       {[
-        { id: 'cash', label: 'ðŸ’µ Cash', color: C.primary, bg: C.light },
-        { id: 'upi',  label: 'ðŸ“² UPI',  color: C.upi,    bg: C.upiLight },
+        { id: 'cash', label: 'Cash', color: C.primary, bg: C.light },
+        { id: 'upi',  label: 'UPI',  color: C.upi,    bg: C.upiLight },
       ].map(opt => (
         <button key={opt.id} onClick={() => onChange(opt.id)}
           style={{ flex: 1, padding: '13px 0', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.18s',
@@ -63,18 +63,17 @@ function PayToggle({ value, onChange }) {
     </div>
   );
 }
-
-// â”€â”€ PayBadge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// PayBadge
 const PayBadge = ({ method }) => (
   <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
     background: method === 'upi' ? C.upiLight : C.light,
     color: method === 'upi' ? C.upi : C.dark,
     border: `1px solid ${method === 'upi' ? '#ddd6fe' : C.border}` }}>
-    {method === 'upi' ? 'ðŸ“² UPI' : 'ðŸ’µ Cash'}
+    {method === 'upi' ? 'UPI' : 'Cash'}
   </span>
 );
 
-// â”€â”€ App Root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// App Root
 export default function App() {
   const [page,      setPage]      = useState('loading');
   const [user,      setUser]      = useState(null);
@@ -128,7 +127,7 @@ document.head.appendChild(st);
 
   if (page === 'loading') return (
     <div style={{ ...wrap, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}><div style={{ fontSize: 60 }}>ðŸª</div>
+      <div style={{ textAlign: 'center' }}><div style={{ fontSize: 60, fontWeight: 900 }}>VE</div>
         <p style={{ fontWeight: 800, color: C.primary, marginTop: 12 }}>Loading...</p>
       </div>
     </div>
@@ -143,7 +142,7 @@ document.head.appendChild(st);
   );
 }
 
-// â”€â”€ Auth Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Auth Page
 function OwnerLoginPage({ onLogin }) {
   const [f, setF] = useState({ username:'', password:'' });
   const [err, setErr] = useState('');
@@ -157,7 +156,7 @@ function OwnerLoginPage({ onLogin }) {
     if (f.username === 'admin' && f.password === 'grocery123') {
       onLogin({ type:'owner', name:'Admin' });
     } else {
-      setErr('Galat username ya password');
+      setErr('Invalid username or password');
     }
   };
 
@@ -170,7 +169,7 @@ function OwnerLoginPage({ onLogin }) {
       </div>
 
       <div style={{ ...mkCard, width:'100%', maxWidth:380 }}>
-        <div style={{ padding:'10px 12px', background:C.light, borderRadius:10, fontSize:12, color:C.dark, fontWeight:800, marginBottom:16 }}>Sirf owner ke liye</div>
+        <div style={{ padding:'10px 12px', background:C.light, borderRadius:10, fontSize:12, color:C.dark, fontWeight:800, marginBottom:16 }}>Owner access only</div>
         {err && <div style={{ background:C.dangerLight, color:C.danger, padding:'10px 14px', borderRadius:10, marginBottom:14, fontSize:13, fontWeight:700 }}>{err}</div>}
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div><label style={lbl}>Username</label><input style={inp} placeholder="admin" value={f.username||''} onChange={e=>set('username',e.target.value)} onKeyDown={e=>{ if (e.key === 'Enter') handleOwnerLogin(); }} /></div>
@@ -186,10 +185,10 @@ function OwnerPage({ stock, orders, customers, onLogout }) {
   const [tab, setTab] = useState('orders');
   const pendingCount  = orders.filter(o => o.status === 'pending').length;
   const TABS = [
-    { id:'orders',   label:'ðŸ“¦ Orders',   badge: pendingCount },
-    { id:'stock',    label:'ðŸª Stock' },
-    { id:'salesman', label:'ðŸ§¾ Salesman' },
-    { id:'office',   label:'ðŸ–¥ï¸ Office' },
+    { id:'orders',   label:'Orders',   badge: pendingCount },
+    { id:'stock',    label:'Stock' },
+    { id:'salesman', label:'Salesman' },
+    { id:'office',   label:'Office' },
   ];
   return (
     <div style={{ maxWidth:640, margin:'0 auto', minHeight:'100vh', paddingBottom:32 }}>
@@ -197,7 +196,7 @@ function OwnerPage({ stock, orders, customers, onLogout }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
           <div>
             <h1 style={{ fontFamily:"'Fraunces',serif", fontSize:22, fontWeight:700, margin:0 }}>Owner Dashboard</h1>
-            <p style={{ margin:'3px 0 0', opacity:0.75, fontSize:12, fontWeight:600 }}>Vijay Enterprises Â· Business Control</p>
+            <p style={{ margin:'3px 0 0', opacity:0.75, fontSize:12, fontWeight:600 }}>Vijay Enterprises - Business Control</p>
           </div>
           <button onClick={onLogout} style={{ background:'rgba(255,255,255,0.18)', border:'1.5px solid rgba(255,255,255,0.3)', color:'#fff', padding:'8px 14px', borderRadius:10, cursor:'pointer', fontWeight:700, fontSize:13, fontFamily:'inherit' }}>Logout</button>
         </div>
@@ -221,7 +220,7 @@ function OwnerPage({ stock, orders, customers, onLogout }) {
   );
 }
 
-// â”€â”€ Stock Manager â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Stock Manager
 function StockManager({ stock }) {
   const [showForm, setShowForm] = useState(false);
   const [editId,   setEditId]   = useState(null);
@@ -234,31 +233,31 @@ function StockManager({ stock }) {
   const cancel   = ()  => { setShowForm(false); setEditId(null); setF({}); setErr(''); };
   const handleSave = async () => {
     const { name, price, unit, quantity } = f;
-    if (!name?.trim()||!price||!unit||!quantity) { setErr('Sab fields zaroori hain'); return; }
+    if (!name?.trim()||!price||!unit||!quantity) { setErr('All fields are required'); return; }
     setSaving(true);
     try {
       if (editId) await updateDoc(doc(db,'stock',editId), { name:name.trim(), price:+price, unit, quantity:+quantity });
       else        await addDoc(collection(db,'stock'), { name:name.trim(), price:+price, unit, quantity:+quantity });
       cancel();
-    } catch { setErr('Error aaya, dobara try karo'); }
+    } catch { setErr('Something went wrong. Please try again.'); }
     setSaving(false);
   };
-  const handleDelete = async id => { if (!window.confirm('Delete karein?')) return; await deleteDoc(doc(db,'stock',id)); };
+  const handleDelete = async id => { if (!window.confirm('Delete this item?')) return; await deleteDoc(doc(db,'stock',id)); };
   const UNITS = ['kg','g','250g','500g','litre','500ml','packet','dozen','piece','box','bag','bottle','bundle'];
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
         <h2 style={{ margin:0, fontWeight:900, fontSize:18, color:C.dark }}>Stock Management</h2>
-        <button style={mkBtn('primary')} onClick={openAdd}>+ Add Karo</button>
+        <button style={mkBtn('primary')} onClick={openAdd}>+ Add Item</button>
       </div>
       {showForm && (
         <div style={{ ...mkCard, marginBottom:16, borderColor:C.primary, borderWidth:2 }}>
-          <h3 style={{ margin:'0 0 14px', fontWeight:800, color:C.dark }}>{editId?'âœï¸ Edit':'âž• Naya Product'}</h3>
+          <h3 style={{ margin:'0 0 14px', fontWeight:800, color:C.dark }}>{editId?'Edit Product':'New Product'}</h3>
           {err && <div style={{ color:C.danger, fontSize:13, fontWeight:700, marginBottom:10 }}>{err}</div>}
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            <div><label style={lbl}>Product Ka Naam</label><input style={inp} placeholder="Basmati Rice..." value={f.name||''} onChange={e=>set('name',e.target.value)} /></div>
+            <div><label style={lbl}>Product Name</label><input style={inp} placeholder="Basmati Rice..." value={f.name||''} onChange={e=>set('name',e.target.value)} /></div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              <div><label style={lbl}>Price (â‚¹)</label><input style={inp} type="number" placeholder="85" value={f.price||''} onChange={e=>set('price',e.target.value)} /></div>
+              <div><label style={lbl}>Price (Rs.)</label><input style={inp} type="number" placeholder="85" value={f.price||''} onChange={e=>set('price',e.target.value)} /></div>
               <div><label style={lbl}>Unit</label>
                 <select style={inp} value={f.unit||''} onChange={e=>set('unit',e.target.value)}>
                   <option value="">Select</option>
@@ -269,23 +268,23 @@ function StockManager({ stock }) {
             <div><label style={lbl}>Stock Quantity</label><input style={inp} type="number" placeholder="100" value={f.quantity||''} onChange={e=>set('quantity',e.target.value)} /></div>
             <div style={{ display:'flex', gap:10 }}>
               <button style={{ ...mkBtn('outline'), flex:1 }} onClick={cancel}>Cancel</button>
-              <button style={{ ...mkBtn('primary'), flex:2, opacity:saving?0.7:1 }} onClick={handleSave} disabled={saving}>{saving?'Saving...':editId?'Update âœ“':'Add Karo âœ“'}</button>
+              <button style={{ ...mkBtn('primary'), flex:2, opacity:saving?0.7:1 }} onClick={handleSave} disabled={saving}>{saving?'Saving...':editId?'Update':'Add Item'}</button>
             </div>
           </div>
         </div>
       )}
       {stock.length===0
-        ? <div style={{ textAlign:'center', padding:48, color:C.muted }}><div style={{ fontSize:48 }}>ðŸ“¦</div><p style={{ fontWeight:700 }}>Koi stock nahi. Add karo.</p></div>
+        ? <div style={{ textAlign:'center', padding:48, color:C.muted }}><p style={{ fontWeight:700 }}>No stock items yet. Add an item.</p></div>
         : <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {stock.map(p => (
               <div key={p.id} style={{ ...mkCard, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
                 <div>
                   <div style={{ fontWeight:800, fontSize:15 }}>{p.name}</div>
-                  <div style={{ fontSize:13, color:C.muted, marginTop:3 }}>{fmt(p.price)}/{p.unit} <span style={{ marginLeft:8, fontWeight:700, color:p.quantity<10?C.danger:C.primary }}>Â· Stock: {p.quantity} {p.unit}</span></div>
+                  <div style={{ fontSize:13, color:C.muted, marginTop:3 }}>{fmt(p.price)}/{p.unit} <span style={{ marginLeft:8, fontWeight:700, color:p.quantity<10?C.danger:C.primary }}> Stock: {p.quantity} {p.unit}</span></div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={()=>openEdit(p)} style={{ ...mkBtn('outline'), padding:'6px 12px', fontSize:13 }}>Edit</button>
-                  <button onClick={()=>handleDelete(p.id)} style={{ ...mkBtn('danger'), padding:'6px 12px', fontSize:13 }}>Del</button>
+                  <button onClick={()=>handleDelete(p.id)} style={{ ...mkBtn('danger'), padding:'6px 12px', fontSize:13 }}>Delete</button>
                 </div>
               </div>
             ))}
@@ -295,7 +294,7 @@ function StockManager({ stock }) {
   );
 }
 
-// â”€â”€ Salesman Panel (Bill Style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Salesman Panel (Bill Style)
 function SalesmanBillingPanel({ stock, customers }) {
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -366,8 +365,8 @@ function SalesmanBillingPanel({ stock, customers }) {
   };
 
   const placeBill = async () => {
-    if (!selectedCustomer) { setErr('Customer select karo'); return; }
-    if (!orderItems.length) { setErr('Bill mein kam se kam ek item add karo'); return; }
+    if (!selectedCustomer) { setErr('Please select a customer'); return; }
+    if (!orderItems.length) { setErr('Add at least one item to the bill'); return; }
 
     setPlacing(true);
     setErr('');
@@ -386,9 +385,9 @@ function SalesmanBillingPanel({ stock, customers }) {
 
         stockDocs.forEach((snap, index) => {
           const item = orderItems[index];
-          if (!snap.exists()) throw new Error(`${item.name} stock mein nahi mila`);
+          if (!snap.exists()) throw new Error(`${item.name} was not found in stock`);
           const available = Number(snap.data().quantity || 0);
-          if (available < item.quantity) throw new Error(`${item.name} ka stock sirf ${available} ${item.unit} hai`);
+          if (available < item.quantity) throw new Error(`${item.name} has only ${available} ${item.unit} in stock`);
         });
 
         transaction.set(orderRef, {
@@ -421,7 +420,7 @@ function SalesmanBillingPanel({ stock, customers }) {
       setSuccessBill({ billNumber:bn, customerName, customerStore, items:orderItems, total, paid, balance, paymentMethod });
       resetBill();
     } catch (e) {
-      setErr(e?.message || 'Bill save nahi hua, dobara try karo');
+      setErr(e?.message || 'Bill could not be saved. Please try again.');
     } finally {
       setPlacing(false);
     }
@@ -431,7 +430,7 @@ function SalesmanBillingPanel({ stock, customers }) {
     <div style={{ textAlign:'center' }}>
       <div style={{ ...mkCard, maxWidth:420, margin:'0 auto', borderColor:C.primary, borderWidth:2 }}>
         <div style={{ width:48, height:48, borderRadius:'50%', background:C.light, color:C.primary, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 10px', fontWeight:900, fontSize:24 }}>OK</div>
-        <h3 style={{ fontWeight:900, color:C.dark, margin:'0 0 4px' }}>Bill Save Ho Gaya</h3>
+        <h3 style={{ fontWeight:900, color:C.dark, margin:'0 0 4px' }}>Bill Saved</h3>
         <div style={{ fontSize:13, color:C.muted, marginBottom:16 }}>Bill No: #{successBill.billNumber}</div>
         <div style={{ textAlign:'left', background:C.bg, borderRadius:12, padding:14, marginBottom:14 }}>
           <div style={{ fontWeight:900 }}>{successBill.customerStore || successBill.customerName}</div>
@@ -449,7 +448,7 @@ function SalesmanBillingPanel({ stock, customers }) {
           {successBill.balance > 0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:C.danger, fontWeight:700 }}><span>Balance</span><span>{fmt(successBill.balance)}</span></div>}
         </div>
         <div style={{ marginBottom:16 }}><PayBadge method={successBill.paymentMethod} /></div>
-        <button style={{ ...mkBtn('primary'), width:'100%', padding:13 }} onClick={() => setSuccessBill(null)}>Naya Bill Banao</button>
+        <button style={{ ...mkBtn('primary'), width:'100%', padding:13 }} onClick={() => setSuccessBill(null)}>Create New Bill</button>
       </div>
     </div>
   );
@@ -459,7 +458,7 @@ function SalesmanBillingPanel({ stock, customers }) {
       <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:C.light, borderRadius:14 }}>
         <div style={{ width:34, height:34, borderRadius:10, background:C.primary, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>B</div>
         <div><div style={{ fontWeight:900, color:C.dark }}>Salesman Bill</div>
-          <div style={{ fontSize:12, color:C.muted }}>Saved customer select karo, inventory se item add karo</div>
+          <div style={{ fontSize:12, color:C.muted }}>Select a saved customer and add inventory items</div>
         </div>
       </div>
 
@@ -469,21 +468,21 @@ function SalesmanBillingPanel({ stock, customers }) {
         <h3 style={{ margin:'0 0 12px', fontWeight:800, color:C.dark, fontSize:15 }}>Customer Search</h3>
         <input
           style={inp}
-          placeholder="Customer naam, shop, mobile search karo"
+          placeholder="Search by customer, shop, or mobile"
           value={customerSearch}
           onChange={e => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setErr(''); }}
         />
         {!selectedCustomer && (
           <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:8 }}>
             {customers.length === 0
-              ? <div style={{ color:C.muted, fontSize:13, fontWeight:700, background:C.bg, borderRadius:10, padding:12 }}>Office page par customer details save karo.</div>
+              ? <div style={{ color:C.muted, fontSize:13, fontWeight:700, background:C.bg, borderRadius:10, padding:12 }}>Save customer details on the Office page first.</div>
               : matchedCustomers.length === 0
-                ? <div style={{ color:C.muted, fontSize:13, fontWeight:700, background:C.bg, borderRadius:10, padding:12 }}>Koi customer nahi mila.</div>
+                ? <div style={{ color:C.muted, fontSize:13, fontWeight:700, background:C.bg, borderRadius:10, padding:12 }}>No customer found.</div>
                 : matchedCustomers.map(customer => (
                     <button key={customer.id} onClick={() => selectCustomer(customer)}
                       style={{ ...mkCard, padding:12, textAlign:'left', cursor:'pointer', boxShadow:'none', borderColor:C.border }}>
                       <div style={{ fontWeight:900, color:C.dark }}>{customer.name}</div>
-                      <div style={{ fontSize:13, color:C.muted }}>{customer.storeName || 'Shop name missing'} Â· {customer.mobile || 'Mobile missing'}</div>
+                      <div style={{ fontSize:13, color:C.muted }}>{customer.storeName || 'Shop name missing'} - {customer.mobile || 'Mobile missing'}</div>
                       {customer.address && <div style={{ fontSize:12, color:C.muted, marginTop:3 }}>{customer.address}</div>}
                     </button>
                   ))
@@ -494,7 +493,7 @@ function SalesmanBillingPanel({ stock, customers }) {
           <div style={{ marginTop:12, background:C.light, borderRadius:12, padding:12, display:'flex', justifyContent:'space-between', gap:12, alignItems:'flex-start' }}>
             <div>
               <div style={{ fontWeight:900, color:C.dark }}>{selectedCustomer.name}</div>
-              <div style={{ fontSize:13, color:C.muted }}>{selectedCustomer.storeName || 'Shop name missing'} Â· {selectedCustomer.mobile || 'Mobile missing'}</div>
+              <div style={{ fontSize:13, color:C.muted }}>{selectedCustomer.storeName || 'Shop name missing'} - {selectedCustomer.mobile || 'Mobile missing'}</div>
               {selectedCustomer.address && <div style={{ fontSize:12, color:C.muted, marginTop:3 }}>{selectedCustomer.address}</div>}
             </div>
             <button style={{ ...mkBtn('outline'), padding:'6px 10px', fontSize:12, boxShadow:'none' }} onClick={clearCustomer}>Change</button>
@@ -504,14 +503,14 @@ function SalesmanBillingPanel({ stock, customers }) {
 
       {!selectedCustomer ? (
         <div style={{ ...mkCard, textAlign:'center', padding:32, color:C.muted, fontWeight:700 }}>
-          Customer select karne ke baad bill format yahan dikhega.
+          Select a customer to show the bill format here.
         </div>
       ) : (
         <>
           <div style={mkCard}>
             <h3 style={{ margin:'0 0 14px', fontWeight:800, color:C.dark, fontSize:15 }}>Inventory Items</h3>
             {stock.length===0
-              ? <p style={{ color:C.muted, fontWeight:600 }}>Koi stock nahi</p>
+              ? <p style={{ color:C.muted, fontWeight:600 }}>No stock items available</p>
               : <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {stock.map(p => {
                     const q = quantities[p.id];
@@ -522,7 +521,7 @@ function SalesmanBillingPanel({ stock, customers }) {
                       <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 0', borderBottom:`1px dashed ${C.border}`, opacity:isOut?0.55:1 }}>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontWeight:800, fontSize:14, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</div>
-                          <div style={{ fontSize:12, color:C.muted }}>{fmt(p.price)} / {p.unit} Â· Stock: {available} {p.unit}</div>
+                          <div style={{ fontSize:12, color:C.muted }}>{fmt(p.price)} / {p.unit} - Stock: {available} {p.unit}</div>
                         </div>
                         <input
                           type="number" min="0" max={available} placeholder="0" disabled={isOut}
@@ -546,13 +545,13 @@ function SalesmanBillingPanel({ stock, customers }) {
               <div style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
                 <div>
                   <div style={{ fontWeight:900, color:C.dark }}>{selectedCustomer.storeName || selectedCustomer.name}</div>
-                  <div style={{ fontSize:13, color:C.muted }}>{selectedCustomer.name} Â· {selectedCustomer.mobile}</div>
+                  <div style={{ fontSize:13, color:C.muted }}>{selectedCustomer.name} - {selectedCustomer.mobile}</div>
                 </div>
                 <div style={{ fontSize:12, fontWeight:800, color:C.primary }}>Bill #{draftBillNumber}</div>
               </div>
             </div>
             {orderItems.length === 0
-              ? <div style={{ color:C.muted, fontSize:13, fontWeight:700 }}>Inventory se item quantity add karo.</div>
+              ? <div style={{ color:C.muted, fontSize:13, fontWeight:700 }}>Add item quantities from inventory.</div>
               : <>
                   {orderItems.map((it, i) => (
                     <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'6px 0', borderBottom:`1px dashed ${C.border}` }}>
@@ -593,7 +592,7 @@ function SalesmanBillingPanel({ stock, customers }) {
           <button
             style={{ ...mkBtn('primary'), width:'100%', padding:16, fontSize:17, borderRadius:14, opacity: placing?0.7:1, boxShadow:'0 4px 16px rgba(22,163,74,0.3)' }}
             onClick={placeBill} disabled={placing}>
-            {placing ? 'Bill save ho raha hai...' : `Bill Save Karo Â· ${paymentMethod==='cash'?'Cash':'UPI'}${balance>0?' Â· Balance: '+fmt(balance):''}`}
+            {placing ? 'Saving bill...' : `Save Bill - ${paymentMethod==='cash'?'Cash':'UPI'}${balance>0?' - Balance: '+fmt(balance):''}`}
           </button>
         </>
       )}
@@ -609,15 +608,15 @@ function OrdersManager({ orders }) {
   const sorted   = [...orders].sort((a,b) => new Date(b.placedAt)-new Date(a.placedAt));
   const filtered = filter==='all' ? sorted : sorted.filter(o=>o.status===filter);
   const doConfirm = async () => {
-    if (!deliveryDate) { alert('Delivery date zaroori hai!'); return; }
+    if (!deliveryDate) { alert('Delivery date is required'); return; }
     await updateDoc(doc(db,'orders',confirmOrder.id), { status:'confirmed', confirmedAt:now(), deliveryDate });
     setConfirmOrder(null); setDeliveryDate('');
   };
   const doDeliver = async id => updateDoc(doc(db,'orders',id), { status:'delivered', deliveredAt:now() });
   const STATUS = {
-    pending:   { color:'amber', label:'â³ Pending' },
-    confirmed: { color:'green', label:'âœ… Confirmed' },
-    delivered: { color:'gray',  label:'ðŸšš Delivered' },
+    pending:   { color:'amber', label:'Pending' },
+    confirmed: { color:'green', label:'Confirmed' },
+    delivered: { color:'gray',  label:'Delivered' },
   };
   const stats = ['pending','confirmed','delivered'].map(s=>({ s, count:orders.filter(o=>o.status===s).length }));
   return (
@@ -626,13 +625,13 @@ function OrdersManager({ orders }) {
       {confirmOrder && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
           <div style={{ ...mkCard, width:'100%', maxWidth:380 }}>
-            <h3 style={{ margin:'0 0 6px', fontWeight:900, color:C.dark }}>âœ… Order Confirm Karo</h3>
+            <h3 style={{ margin:'0 0 6px', fontWeight:900, color:C.dark }}>Confirm Order</h3>
             <p style={{ margin:'0 0 16px', color:C.muted, fontSize:14 }}><strong>{confirmOrder.customerStore||confirmOrder.customerName}</strong></p>
             <label style={lbl}>Delivery Date</label>
             <input type="date" style={inp} value={deliveryDate} onChange={e=>setDeliveryDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
             <div style={{ display:'flex', gap:10, marginTop:16 }}>
               <button style={{ ...mkBtn('outline'), flex:1 }} onClick={()=>setConfirmOrder(null)}>Cancel</button>
-              <button style={{ ...mkBtn('primary'), flex:2 }} onClick={doConfirm}>Confirm âœ“</button>
+              <button style={{ ...mkBtn('primary'), flex:2 }} onClick={doConfirm}>Confirm</button>
             </div>
           </div>
         </div>
@@ -645,18 +644,18 @@ function OrdersManager({ orders }) {
               <div>
                 {detailOrder.billNumber && <div style={{ fontSize:12, fontWeight:700, color:C.primary, marginBottom:4 }}>Bill #{detailOrder.billNumber}</div>}
                 <div style={{ fontWeight:900, fontSize:17, color:C.dark }}>{detailOrder.customerStore||detailOrder.customerName}</div>
-                <div style={{ fontSize:13, color:C.muted }}>{detailOrder.customerName} Â· ðŸ“ž {detailOrder.customerMobile}</div>
-                <div style={{ fontSize:12, color:C.muted }}>ðŸ“ {detailOrder.customerAddress}</div>
+                <div style={{ fontSize:13, color:C.muted }}>{detailOrder.customerName} - {detailOrder.customerMobile}</div>
+                <div style={{ fontSize:12, color:C.muted }}>{detailOrder.customerAddress}</div>
                <div style={{ marginTop:6, display:'flex', gap:6 }}>
   <PayBadge method={detailOrder.paymentMethod || 'cash'} />
   {detailOrder.placedBy==='salesman' && (
     <span style={{ ...mkBadge('gray'), fontSize:10 }}>
-      ðŸ§¾ Salesman
+      Salesman
     </span>
   )}
 </div>
               </div>
-              <button onClick={()=>setDetailOrder(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.muted }}>âœ•</button>
+              <button onClick={()=>setDetailOrder(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.muted }}>X</button>
             </div>
             <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:12, marginBottom:12 }}>
               {getOrderItems(detailOrder).map((it,i) => (
@@ -671,17 +670,17 @@ function OrdersManager({ orders }) {
             </div>
             {detailOrder.paidAmount > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, color:C.primary, fontWeight:700, marginBottom:4 }}>
-                <span>ðŸ’µ Diya Gaya</span><span>{fmt(detailOrder.paidAmount)}</span>
+                <span>Paid</span><span>{fmt(detailOrder.paidAmount)}</span>
               </div>
             )}
             {detailOrder.balance > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, color:C.danger, fontWeight:700, padding:'8px 0' }}>
-                <span>âš ï¸ Baaki Hai</span><span>{fmt(detailOrder.balance)}</span>
+                <span>Balance</span><span>{fmt(detailOrder.balance)}</span>
               </div>
             )}
             {detailOrder.deliveryDate && (
               <div style={{ background:C.light, color:C.dark, padding:'10px 12px', borderRadius:10, fontWeight:700, fontSize:14, marginTop:8 }}>
-                ðŸšš Delivery: {fmtDate(detailOrder.deliveryDate+'T00:00:00')}
+                Delivery: {fmtDate(detailOrder.deliveryDate+'T00:00:00')}
               </div>
             )}
           </div>
@@ -706,7 +705,7 @@ function OrdersManager({ orders }) {
         ))}
       </div>
       {filtered.length===0
-        ? <div style={{ textAlign:'center', padding:40, color:C.muted }}><div style={{ fontSize:40 }}>ðŸ“­</div><p style={{ fontWeight:700 }}>Koi order nahi</p></div>
+        ? <div style={{ textAlign:'center', padding:40, color:C.muted }}><p style={{ fontWeight:700 }}>No orders found</p></div>
         : <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {filtered.map(o => {
               const items = getOrderItems(o);
@@ -717,24 +716,24 @@ function OrdersManager({ orders }) {
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
                   <div>
                     <div style={{ fontWeight:800, fontSize:15 }}>{o.customerStore||o.customerName}</div>
-                    <div style={{ fontSize:13, color:C.muted }}>ðŸ‘¤ {o.customerName} Â· ðŸ“ž {o.customerMobile}</div>
+                    <div style={{ fontSize:13, color:C.muted }}>{o.customerName} - {o.customerMobile}</div>
                     <div style={{ marginTop:4, display:'flex', gap:6 }}>
                       <PayBadge method={o.paymentMethod||'cash'} />
-                      {o.placedBy==='salesman' && <span style={{ ...mkBadge('gray'), fontSize:10 }}>ðŸ§¾ Salesman</span>}
+                      {o.placedBy==='salesman' && <span style={{ ...mkBadge('gray'), fontSize:10 }}>Salesman</span>}
                     </div>
                   </div>
                   <span style={mkBadge(status.color)}>{status.label}</span>
                 </div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>{items.length} item(s) Â· {fmtDT(o.placedAt)}</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>{items.length} item(s) - {fmtDT(o.placedAt)}</div>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <div>
                     <span style={{ fontWeight:900, color:C.dark, fontSize:17 }}>{fmt(o.total)}</span>
-                    {o.balance > 0 && <span style={{ marginLeft:8, fontSize:12, color:C.danger, fontWeight:700 }}>âš ï¸ Baaki: {fmt(o.balance)}</span>}
+                    {o.balance > 0 && <span style={{ marginLeft:8, fontSize:12, color:C.danger, fontWeight:700 }}>Balance: {fmt(o.balance)}</span>}
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={()=>setDetailOrder(o)} style={{ ...mkBtn('outline'), padding:'6px 12px', fontSize:12, boxShadow:'none' }}>Details</button>
-                    {o.status==='pending'   && <button onClick={()=>{ setConfirmOrder(o); setDeliveryDate(''); }} style={{ ...mkBtn('primary'), padding:'6px 14px', fontSize:12 }}>Confirm âœ“</button>}
-                    {o.status==='confirmed' && <button onClick={()=>doDeliver(o.id)} style={{ ...mkBtn('amber'), padding:'6px 14px', fontSize:12 }}>Deliver âœ“</button>}
+                    {o.status==='pending'   && <button onClick={()=>{ setConfirmOrder(o); setDeliveryDate(''); }} style={{ ...mkBtn('primary'), padding:'6px 14px', fontSize:12 }}>Confirm</button>}
+                    {o.status==='confirmed' && <button onClick={()=>doDeliver(o.id)} style={{ ...mkBtn('amber'), padding:'6px 14px', fontSize:12 }}>Deliver</button>}
                   </div>
                 </div>
               </div>
@@ -746,7 +745,7 @@ function OrdersManager({ orders }) {
   );
 }
 
-// â”€â”€ Office Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Office Display
 function OfficePage({ orders, customers }) {
   const [f, setF] = useState({});
   const [editId, setEditId] = useState(null);
@@ -779,16 +778,16 @@ function OfficePage({ orders, customers }) {
   const saveCustomer = async () => {
     const { name, storeName, address, mobile } = f;
     if (!name?.trim() || !storeName?.trim() || !address?.trim() || !mobile?.trim()) {
-      setErr('Customer name, shop name, address, mobile sab zaroori hain');
+      setErr('Customer name, shop name, address, and mobile number are required');
       return;
     }
     if (!isValidIndianMobile(mobile.trim())) {
-      setErr('Valid 10-digit mobile number daalo');
+      setErr('Enter a valid 10-digit mobile number');
       return;
     }
     const duplicate = customers.find(c => c.mobile === mobile.trim() && c.id !== editId);
     if (duplicate) {
-      setErr('Yeh mobile number already saved hai');
+      setErr('This mobile number is already saved');
       return;
     }
 
@@ -805,7 +804,7 @@ function OfficePage({ orders, customers }) {
       else await addDoc(collection(db, 'customers'), { ...payload, createdAt: now() });
       resetCustomerForm();
     } catch {
-      setErr('Customer save nahi hua, dobara try karo');
+      setErr('Customer could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -865,7 +864,7 @@ function OfficePage({ orders, customers }) {
     <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:C.light, borderRadius:14 }}>
         <div style={{ width:34, height:34, borderRadius:10, background:C.primary, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>O</div>
-        <div><div style={{ fontWeight:900, color:C.dark }}>Office</div><div style={{ fontSize:12, color:C.muted }}>Customers yahin save honge; Salesman search isi list se karega</div></div>
+        <div><div style={{ fontWeight:900, color:C.dark }}>Office</div><div style={{ fontSize:12, color:C.muted }}>Save customers here. The Salesman page searches this list.</div></div>
       </div>
 
       <div style={mkCard}>
@@ -881,7 +880,7 @@ function OfficePage({ orders, customers }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
             <div><label style={lbl}>Mobile Number</label><input style={inp} type="tel" maxLength={10} placeholder="9876543210" value={f.mobile || ''} onChange={e=>set('mobile', e.target.value)} /></div>
-            <div><label style={lbl}>Address</label><input style={inp} placeholder="Gali, mohalla, sheher" value={f.address || ''} onChange={e=>set('address', e.target.value)} /></div>
+            <div><label style={lbl}>Address</label><input style={inp} placeholder="Street, area, city" value={f.address || ''} onChange={e=>set('address', e.target.value)} /></div>
           </div>
           <button style={{ ...mkBtn('primary'), width:'100%', padding:13, opacity:saving?0.7:1 }} onClick={saveCustomer} disabled={saving}>
             {saving ? 'Saving...' : editId ? 'Update Customer' : 'Save Customer'}
@@ -895,7 +894,7 @@ function OfficePage({ orders, customers }) {
           <span style={mkBadge('green')}>{customers.length}</span>
         </div>
         {sortedCustomers.length === 0
-          ? <div style={{ color:C.muted, fontWeight:700, fontSize:13 }}>Abhi koi customer saved nahi hai.</div>
+          ? <div style={{ color:C.muted, fontWeight:700, fontSize:13 }}>No saved customers yet.</div>
           : <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:300, overflowY:'auto' }}>
               {sortedCustomers.map(customer => (
                 <div key={customer.id} style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'flex-start', padding:'10px 0', borderBottom:`1px dashed ${C.border}` }}>
@@ -916,9 +915,9 @@ function OfficePage({ orders, customers }) {
           <h3 style={{ margin:0, fontWeight:900, color:C.dark, fontSize:16 }}>All Saved Bills / Orders</h3>
           <span style={mkBadge('green')}>{orders.length}</span>
         </div>
-        <input style={{ ...inp, marginBottom:12 }} placeholder="Bill, customer, mobile, status search karo" value={billSearch} onChange={e=>setBillSearch(e.target.value)} />
+        <input style={{ ...inp, marginBottom:12 }} placeholder="Search bill, customer, mobile, or status" value={billSearch} onChange={e=>setBillSearch(e.target.value)} />
         {visibleBills.length === 0
-          ? <div style={{ ...mkCard, textAlign:'center', padding:32, color:C.muted, fontWeight:700 }}>Koi saved bill/order nahi mila.</div>
+          ? <div style={{ ...mkCard, textAlign:'center', padding:32, color:C.muted, fontWeight:700 }}>No saved bills or orders found.</div>
           : <div style={{ display:'flex', flexDirection:'column', gap:10 }}>{visibleBills.map(order => <BillCard key={order.id} order={order} />)}</div>
         }
       </div>
